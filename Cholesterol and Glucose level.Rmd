@@ -1,0 +1,394 @@
+---
+title: "The Relationship between the Stabilized Glucose Level and Other Impacted Factors"
+author: "Jingyu Liu(1005735448)"
+date: "2021/12/15"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning =FALSE, message=FALSE)
+```
+
+```{r,include=FALSE}
+library(tidyverse)
+library(car)
+library(patchwork)
+library(gridExtra)
+library(readr)
+library(ggplot2)
+library(magrittr)
+library(dplyr)
+library(knitr)
+library(tinytex)
+library(openintro)
+library(cesR)
+library(broom)
+```
+
+```{r,include=FALSE}
+diabetes=read.csv("/Users/teresa/Desktop/diabetes.csv")
+d=diabetes[,c(3,2,4,5,6,7,8,9,11)]
+d1=na.omit(d)
+d1$has_diabetes=ifelse(d1$stab.glu>137,1,0)
+d1$heart_disease=ifelse(d1$ratio>=5,1,0)
+d1$place=ifelse(d1$location=="Buckingham",1,0)
+d1$gendertype=ifelse(d1$gender=="male",'male','female')
+d1
+d2=d1[,c(1,2,3,5,7,9,10,11,12,13)]
+d2
+```
+
+```{r,include=FALSE}
+#1.starting model
+set.seed(448)
+k=nrow(d2)
+training=sample(1:k,size=round(0.75*k))
+d2=d2 %>% rowid_to_column()
+train= d2 %>% filter(rowid %in% training)
+teat= d2 %>% filter(!(rowid %in% training))
+final_model=lm(stab.glu~.-rowid,data=train)
+```
+# Introduction
+
+## Background
+
+Since 2019, the coronavirus has spread rapidly around the world. Researchers have found that 20% to 50% of patients who have diabetes are more easily infected with new coronary pneumonia. A report from Lancet (K.et.al, 2020) on the issue shows that the probability of new coronavirus to bind with ACE2 is 10 to
+20 times more than SARS coronavirus, because the infection of the virus could increase blood sugar and it cause abnormal metabolism.A research paper on the U of T library on this question showed that the diagnosis of diabetes mellitus is based on glucose level, which are always complicated by microvascular of the
+disease. By controlling hyperglycaemia, we can help to strengthen the function of remaining$\beta$−cell(Patrick,Gareth,2001).
+
+## Importance
+
+The importance of doing this research is diabetes is a very common disease, it’s not only one of the top 10 causes of death, but the prevalence of type 2 diabetes is also extremely high among the elder people. Besides,the rates of type 2 diabetes are rising in many young people, due to our unhealthy habit of daily diet. If our body continues to be in a condition of hyperglycaemia, then our ability to defend against infection will become low, which means we are more likely to be infected during the pandemic of COVID-19(Stefan, R. B.,2001).
+
+## Research question
+
+We want to investigate the relationship between the stabilized glucose level and other impacted factors: cholesterol level, high density lipoprotein level, age, glycosolated hemoglobin and gender in type 2 diabetes. The dataset is obtained from http://hbiostat.org/data courtesy of the Vanderbilt University Department of
+Biostatistics, and permission is granted to anyone wishing to use the data sets provided in the website.
+
+# Methods
+
+```{r,include=FALSE}
+#2.check multicollinearity
+#1)
+vif(final_model)
+
+#2)
+final_model2=lm(stab.glu~.-rowid -heart_disease,data=train)
+vif(final_model2)
+
+#3)
+final_model3=lm(stab.glu~.-rowid -heart_disease -has_diabetes,data=train)
+vif(final_model3)
+```
+1) In order to investigate the relationship between the stabilized glucose level and other impacted factors, we selected 10 variables and we built a multiple linear regression model. The response variable is stabilized glucose level, while the predictors contain 9 independent variables: cholesterol level, high density lipoprotein(hdl), glycosolated hemoglobin(glyhb), age, weight, the condition of diabetes, condition of heart disease, place and gender type.\
+There are more than 2 independent variables in the regression model, so the multicollinearity need to be checked for excluding the highly correlated independent variables, so that the reliable probability of the regression model is increased.\
+From the lecture, we know that when the variance inflation factor of a variable is greater than 5, the variable is highly correlated with another independent variable in the regression model. \
+
+```{r,include=FALSE}
+#3.check 2 conditions
+#1)condition1:yi and yi hat
+yhat=fitted(final_model3)
+y=train$stab.glu
+plot(y,yhat)
+abline(a=0,b=1)
+#2)predictors
+pairs(~chol+hdl+age+weight+glyhb,data=train)
+```
+2) The conditions 1 and 2 need to be checked to see if we can use residual plot to fix the regression model. In condition 1, we check the conditional mean response between predictors, in condition 2, we check the conditional mean of each predictors with another predictor.\
+
+```{r,include=FALSE,message=FALSE}
+#4.residual plot
+#1)residuals and fitted
+r=rstandard(final_model3)
+yhat=fitted(final_model3)
+plot(yhat,r)
+
+#2)residuals and predictors
+par(mfrow=c(2,3))
+plot(train$chol,r)
+plot(train$hdl,r)
+plot(train$age,r)
+plot(train$weight,r)
+plot(train$glyhb,r)
+
+#3)qq
+qqnorm(r)
+qqline(r)
+```
+3) The residual plots are used to check if there is potential violations that is different from model assumptions. Firstly, the residual plot is created to check relationship of residuals v.s. fitted model. Then the second residual plot is created to check relationship of residual v.s. predictors. \
+```{r,include=FALSE}
+#5.transform
+train2 <-train %>%
+  filter(stab.glu>0) %>%
+  filter(chol>0) %>%
+  filter(hdl>0) %>%
+  filter(weight>0) %>%
+  filter(age>0) %>%
+  filter(glyhb>0) 
+summary(powerTransform(cbind(train2$stab.glu, train2$chol, train2$hdl, train2$weight, train2$age, train2$glyhb)))
+transt=train %>%
+  mutate(tstab.glu=stab.glu^(-1),
+         tage=age^(0.5),
+         tglyhb=glyhb^(-1))
+#new transformed model
+tmodel=lm(tstab.glu~.-rowid -heart_disease -has_diabetes -stab.glu -age -glyhb, data=transt)
+```
+4) The box-cox transformation can transform the data so the data is closed to normal distribution. The method is taking the inverse of the variables or get inverse square root on variables. \
+```{r,include=FALSE}
+#6.automated selection vs manual
+#automated
+automodel=step(tmodel,direction="both")
+summary(automodel)
+```
+
+```{r,include=FALSE}
+#manual
+summary(tmodel)
+rm=lm(tstab.glu~chol+hdl+tage+tglyhb,data=transt)
+```
+5) Automated selection is a method that can choose the predictors automatically, it contains 3 methods: forward selection, backward selection and stepwise selection. The stepwise selection is applied so that the iteration could add or remove predictors until there is no more predictors to be added or removed. The automated selection kept the predictors that will make model has smallest AIC value. While manual selection select the predictors by common sense, full model, and automated selection model.\
+
+```{r,include=FALSE}
+#6.compare
+anova(automodel,tmodel)
+anova(rm,tmodel)
+```
+
+```{r,include=FALSE}
+#R2
+summary(tmodel)$adj.r.squared
+summary(automodel)$adj.r.squared
+summary(rm)$adj.r.squared
+```
+
+```{r,include=FALSE}
+#AIC,BIC
+AIC(tmodel)
+AIC(automodel)
+AIC(rm)
+BIC(tmodel)
+BIC(automodel)
+BIC(rm)
+```
+6) Predictors in both of automated selection model and manual selection model are contained in full model, so Anova test is used to check the p value. If the p value is smaller than 0.05, then we have strong evidence to reject the original hypothesis, then the full model is better. Otherwise, the reduced model is better. \
+Then adjusted R square is calculated to make sure that how reliable the correlation is and how it is affected by the addition of independent variables. The model with a bigger adjusted $R^2$ value is a better option. AIC is used to compare different possible models and decide which one is the best option for the dataset. BIC is also used to assess model fit. The model with a smaller AIC or smaller BIC value is a better option.\
+```{r,include=FALSE}
+#7.Leverage,outlier,influential point
+#leverage
+hat=hatvalues(rm)
+threshold=2*(length(rm$coefficients)/nrow(transt))
+which(hat>threshold)
+#choose row
+transt[c(4,30,44,48,94,126,150,151,159,160,217,225,234,238,246,271,274,287,288,290),]
+```
+
+```{r,include=FALSE}
+#outlier
+std_r=rstandard(rm)
+which(abs(std_r)>4)
+#choose row
+transt[98,]
+```
+
+```{r,include=FALSE}
+#cooks distance
+cd=cooks.distance(rm)
+cd1=qf(0.5, length(rm$coefficients),nrow(transt)-length(rm$coefficients))
+which(cd>cd1)
+```
+7) When a data point has high leverage, it has an extreme predictor. By checking the leverage point. Outliers is the value of y that does not follow the general trend of the rest of the data. By checking the cook's distance, we find out that there is no influential point.\
+8)The diagnostic plot is to check the condition 1 and 2, and residual plots for one more time. \
+
+```{r,include=FALSE}
+#8.diagnostic plots
+#condition1 scatterplot y and yhat
+yhat=fitted(rm)
+y=transt$tstab.glu
+plot(y,yhat)
+abline(a=0,b=1)
+#condition2 between predictors(numerical only)
+pairs(~chol+hdl+tage+tglyhb,data=transt)
+```
+```{r,include=FALSE}
+#residual plot
+#r vs fitted
+r=rstandard(rm)
+yhat=fitted(rm)
+plot(yhat,r)
+#r vs predictors
+par(mfrow=c(2,2))
+plot(transt$chol,r)
+plot(transt$hdl,r)
+plot(transt$tage,r)
+plot(transt$tglyhb,r)
+#qq
+qqnorm(r)
+qqline(r)
+```
+
+
+
+# Results
+
+## Important Variables
+
+Variables | Description |
+----------|-------------|
+stab.glu | Stabilized glucose Level |
+weight | Weight of subjects|
+glyhb | Glycosolated Hemoglobin Level |
+hdl | High Density Lipoprotein Level |
+chol | cholesterol level |
+age | The age of subjects |
+gendertype | The gender of subjects |\
+
+## Numerical summaries
+
+```{r,include=FALSE}
+library(readxl)
+library(dplyr)
+library(kableExtra)
+library(knitr)
+stab.glu=d2$stab.glu
+weight=d2$weight
+glyhb=d2$glyhb
+hdl=d2$hdl
+chol=d2$chol
+age=d2$age
+gendertype=d2$gendertype
+summary(d2)
+```
+
+Variables | Mean | Median | Min | Max | IQR | s.d. |
+--------- | ---- | ------ | --- | --- | --- | ---- |
+glucose | 107.08505 | 90 | 48 | 385 | 26.25 | 53.5 |
+glycosolated hemoglobin | 5.5725 | 4.84 | 2.68 | 16.1 | 1.22 | 2.21 |
+high density lipoprotein | 50.34 | 46 | 12 | 120 | 21 | 17.3 |
+cholesterol | 207.5 | 203.5 | 78 | 443 | 50.25 | 44.53 |
+age | 46.74 | 44 | 19 | 92 | 26 | 16.47 | \
+
+The table above shows the numerical summaries of glucose level and glycosolated hemoglobin level, high density lipoprotein level, age. Most of the people has glucose level around 90, glycosolated hemoglobin level around 5, high density lipoprotein level around 46, cholesterol level around 203.\
+
+```{r,include=FALSE}
+#par(mfrow=c(3,1))
+#k1=hist(d1$stab.glu, main="Glucose Level", xlab="Stabilized Glucose Level")
+#k3=hist(d1$glyhb, main="Glycosolated Hemoglobin", xlab="Glycosolated Hemoglobin")
+#k4=hist(d1$hdl, main="High Density Lipoprotein", xlab="High Density Lipoprotein")
+
+```
+The histogram of glucose level shows that most of the value cluster around 100, while the histogram of glycosolated hemoglobin cluster around 5 and the high density lipoprotein cluster around 50. All of the histogram are right skewed. \
+
+```{r,echo=FALSE,message=FALSE}
+k5=ggplot(data=d1,aes(x=chol,y=stab.glu)) + geom_point() + geom_smooth(se=FALSE,method="lm")
+k6=ggplot(data=d1,aes(x=age,y=stab.glu)) + geom_point() + geom_smooth(se=FALSE,method="lm")
+#k3=ggplot(data=d1,aes(x=ratio,y=stab.glu)) + geom_point() + geom_smooth(se=FALSE,method="lm")
+k7=ggplot(data=d1,aes(x=weight,y=stab.glu)) + geom_point() + geom_smooth(se=FALSE,method="lm")
+k8=ggplot(data=d1,aes(x=gendertype,y=stab.glu))+geom_boxplot(color='black',fill='yellow')+labs(title='Gender Type')+coord_flip()
+(k5|k6)/
+  (k7|k8)
+```
+
+The scatter plot shows that cholesterol level, age and weight have a linear positive relationship with the glucose level. The box plot indicates male and female have similar glucose level, while some of the female tends to have higher glucose.\
+
+## Process
+
+Firstly, multicollinearity is checked because highly correlated variables need to be excluded. After checking the variace inflation factor, the predictors of condition of diabetes and heart disease is removed since they have v.i.f greater than 5. There are 7 predictors remaining: cholesterol and high density lipoprotein level, glycosolated hemoglobin level, age, weight, place and gender type. \
+Then, we checked condition 1 and condition 2 , if the model satisfy both of condition, we could draw residual plots. The model of the ith glucose level v.s. the ith predicted value of glucose has a pattern of linear positive relationship, and it has no pattern of spanning or contraction. In condition 2, the model of each predictors has no pattern of curving. Thus, we could move to the next step, which is drawing the residual plots.\
+After that, we drew some residual plots to check potential violation. Both of the residual plots are randomly dispersed, there is no pattern of fanning, so it's not constant variance. Also, we didn't see clusters of groups in the graph, so there is no uncorrelated errors. However, a few points are out of the line so Q-Q Plot has almost normality distribution. Thus, there is still a little violation in the regression model.\
+We did box-cox transformation for a more well-fitted model. We take the inverse of response variable glucose, and we take the inverse of independent variable glycosolated hemoglobin. \
+In the regression model, we used stepwise selection. The automated selection selected the model with the smallest AIC value, which is the response variable transformed glucose level and predictors transformed glycosolated hemoglobin and high density lipoprotein. In the manual selection, the cholesterol level, high density lipoprotein, transfomed age and transformed glycosolated hemoglobin are selected as predictors, and transformed glucose level is selected as response variable. According to the automated selection model, we kept the transformed glycosolated hemoglobin and high density lipoprotein because these could make the model has smallest AIC value. From the full model, we could see the variance inflation factor of cholesterol level and age is quite small, so these predictors are also added in the manual selection model. \
+We need to compare automated selection model, manual selection model and full model to see which model is better. From the Anova test we could see that the p value of automated selection model v.s.full model is 0.5988, so the full model is considered to be a better option. In the condition of manual selection model v.s. full model, full model is also a better option because the p value is 0.6157. In the procedure, the automated selection model has a bigger adjusted $R^2$ value, and smaller AIC, BIC value.The table is shown below:
+
+Model | Adjusted $R^2$ | AIC | BIC |
+----- | -------------- | --- | --- |
+Transformed Full Model | 0.3811064 | -2678.993 | -2645.933 |
+Auto Selected Model | 0.383969 | -2685.246 | -2670.552 |
+Manual Selected Model | 0.3850439 | -2684.766 | -2666.399 |\
+Last but not least, we check the leverage point, outliers and influential points of the model. We find out that they are reasonable, so we don't need to remove. Also, there is an outlier in row 98. By checking the cook's distance, we find out that there is no influential point.\
+At last, we check diagnostic plot to confirm that the manual selection model is the best option. The plots indicates that after reducing certain predictors, the manual selection model are much more well-fitted than the full model. It is contained in the next section.
+
+## Goodness of final model
+
+The diagnostic plot of regression model is shown as below:
+```{r,include=FALSE}
+#8.diagnostic plots
+#condition1 scatterplot y and yhat
+yhat=fitted(rm)
+y=transt$tstab.glu
+plot(y,yhat)
+abline(a=0,b=1)
+#condition2 between predictors(numerical only)
+pairs(~chol+hdl+tage+tglyhb,data=transt)
+```
+```{r,echo=FALSE}
+#residual plot
+#r vs fitted
+par(mfrow=c(3,3))
+r=rstandard(rm)
+yhat=fitted(rm)
+plot(yhat,r)
+#r vs predictors
+
+plot(transt$chol,r)
+plot(transt$hdl,r)
+plot(transt$tage,r)
+plot(transt$tglyhb,r)
+#qq
+qqnorm(r)
+qqline(r)
+```
+
+The residual plots are randomly dispersed, there is no pattern of fanning, so it's not constant variance, and there is no clusters of groups in the graph, uncorrelated errors is excluded. The Q-Q Plot has almost normality distribution with less point outside of the regression line than the residual plot before model selection. Thus, there is less violation in the final regression model. 
+
+# Discussion
+
+## Interpretation of final model
+
+The manual selection model is chosen as the final model:
+
+```{r,echo = FALSE}
+library(tidyverse)
+library(broom)
+require(broom)
+library(lme4)
+library(data.table)
+rm=lm(tstab.glu~chol+hdl+tage+tglyhb+gendertype,data=transt)
+#gendertype chol  tglyhb
+a=summary(rm)
+knitr::kable(tidy(rm),caption = "Table of Coefficients")
+```
+
+
+
+## Result of coefficients
+
+$\beta_0$: The estimated intercept of the model, which has no meaning.\
+$\beta_1$: When there is one unit increase in cholesterol level, we estimated that there is 0.0000022 unit decrease in the response variable glucose, remaining all other variables the same.\
+$\beta_2$: When there is one unit increase in high density lipoprotein level, we estimated that there is 0.0000142 unit increase in glucose level.\
+$\beta_3$: When there is one unit increase in age, we estimated that there is 0.0001320 unit decrease in glucose level.\
+$\beta_4$: When there is one unit increase in glycosolated hemoglobin, we estimated that there is 0.0328385 unit increase in glucose level.\
+$\beta_5$: the difference of glucose level for male v.s. female.\
+
+The following is the model of the relationship between glcose level and its impacted factors:
+
+$$Y_{glucose}=0.0049842-0.0000022X_{chol}+0.0000142X_{hdl}-0.0001320X_{age}+0.0328385X_{glyhb}-0.0001898X_{male}$$
+
+The final model indicates that stabilized glucose level is influenced by cholesterol level, high density lipoprotein level and glycosolated hymoglobin level, because low HDL cholesterol is a common feature of type 2 diabetes and obesity, the cholesterol may be a corresponding factor for cancer risk due to insulin resistance(Xilin,Y., 2011). Also, in the report, male have lower glucose level than female, this is because females often have more serious complications and a greater risk of death if they have type 2 diabetes(Hannah, S., 2019). Most importantly, the subjects that have high glucose level tends to be younger, so when we are buying the food, we need to check the ingredient list, and it's better to do exercise in our spare time for merabolism.
+
+
+## Limitation
+
+1) In this report, we have used box-cox transformation to convert the predictors glucose level, age and glycosolated hemoglobin so that it closely resembles a normal distribution. However, if lambda is some non-zero number, then the transformed predictors may be more difficult to interpret than just applied a log transformation.(Andrew, P. 2020).\
+2) From the summary of the manual selection model, we find out that except for the p-value of glycosolated hemoglobin, the p-value of other predictors are greater than 0.05, in this case it may indicates that other predictors have no linear relationship with the response variable, but when we checked the model assumption violation in diagnostic plot, the residual plots are randomly distributed without any pattern. Thus, the predictors that are insignificant still have linear relation ship with the response variable. The reasons of some of the predictors that are insignificant may be small sample size relative to the variability in the dataset.\
+
+
+# Bibliography
+
+1. Stefan, R. B., Francesco,R., Kamlesh,K., Geltrude, M., David,H., Andreas L.B.,et al.(2020) *Lancet* [Lancet.doi.org/10.1016/S2213-8587(20)30152-2]
+2. English, P., Williams, G., ebrary, Inc. *Type 2 diabetes*. London: Martin Dunitz.(2001)
+3. Andrew, P.*Box-Cox Transformation: Explained*. [https://towardsdatascience.com/box-cox-transformation-explained-51d745e34203](2020)
+4. Xilin Y., Wing Y.So, Ronald C.W. Ma, Alice P.S. Kong,et al.(2011) *Low HDL Cholesterol, Metformin Use, and Cancer Risk in Type 2 Diabetes*. [https://care-diabetesjournals-org.myaccess.library.utoronto.ca/content/34/2/375].U of T Library(2011) 
+5. Hannah S.*Diabetes in Men versus Women* [https://www.news-medical.net/health/Diabetes-in-Men-versus-Women.aspx](2019)
+
+6. Saunders J.T., DE Hunt, J.B. Schorling *Prevalence of coronary heart disease risk factors among rural blacks: A community-based study.*Southern Medical Journal[90:814-820](1997)
